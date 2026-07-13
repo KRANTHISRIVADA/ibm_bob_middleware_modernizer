@@ -1,0 +1,36 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: background 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.primary { background: #0f62fe; color: #fff; }
+.primary:hover:not(:disabled) { background: #0353e9; }
+
+.secondary { background: #fff; color: #0f62fe; border: 1px solid #0f62fe; }
+.secondary:hover:not(:disabled) { background: #d0e2ff; }
+
+.danger { background: #da1e28; color: #fff; }
+.danger:hover:not(:disabled) { background: #b81921; }
+
+.ghost { background: transparent; color: #0f62fe; border: 1px solid #e5e7eb; }
+.ghost:hover:not(:disabled) { background: #f0f2f5; }
+
+.sm { padding: 6px 14px; font-size: 13px; }
+.md { padding: 10px 20px; font-size: 14px; }
+.lg { padding: 14px 28px; font-size: 16px; }
+
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

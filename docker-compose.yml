@@ -1,0 +1,52 @@
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-modernizer-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - CORS_ORIGIN=http://localhost:3000
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - IBM_WATSONX_API_KEY=${IBM_WATSONX_API_KEY:-}
+      - IBM_WATSONX_PROJECT_ID=${IBM_WATSONX_PROJECT_ID:-}
+      - IBM_WATSONX_URL=${IBM_WATSONX_URL:-https://us-south.ml.cloud.ibm.com}
+      - MAX_UPLOAD_SIZE_MB=50
+      - DB_PATH=/app/data/modernizer.db
+      - UPLOAD_DIR=/app/uploads
+      - ARTIFACTS_DIR=/app/artifacts
+    volumes:
+      - backend-uploads:/app/uploads
+      - backend-artifacts:/app/artifacts
+      - backend-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-modernizer-frontend
+    ports:
+      - "3000:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  backend-uploads:
+  backend-artifacts:
+  backend-data:

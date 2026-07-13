@@ -1,0 +1,53 @@
+.wrapper { margin-bottom: 32px; }
+
+.bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  background: #0f62fe;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.steps {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  opacity: 0.45;
+  transition: opacity 0.2s;
+}
+.done, .current { opacity: 1; }
+.current .dot { background: #0f62fe; color: #fff; }
+.done .dot { background: #198038; color: #fff; }
+
+.dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #697077;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.label {
+  font-size: 11px;
+  color: #57606a;
+  text-align: center;
+  max-width: 70px;
+}

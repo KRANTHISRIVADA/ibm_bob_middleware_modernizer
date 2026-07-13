@@ -1,0 +1,155 @@
+/* Shared page styles */
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pageTitle { font-size: 26px; font-weight: 700; color: #1f2328; margin-bottom: 4px; }
+.pageSubtitle { color: #57606a; font-size: 14px; }
+
+/* Stats */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.statCard {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+.statValue { font-size: 36px; font-weight: 700; }
+.statLabel { font-size: 13px; color: #57606a; margin-top: 4px; }
+
+/* Table */
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th { text-align: left; padding: 10px 12px; background: #f7f8fa; font-weight: 600; color: #57606a; border-bottom: 1px solid #e5e7eb; }
+.table td { padding: 12px 12px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+.table tr:hover td { background: #f7f8fa; }
+.bold { font-weight: 600; }
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #dde1e7;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Forms */
+.formGroup { margin-bottom: 20px; }
+.label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 14px; }
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #dde1e7;
+  border-radius: 4px;
+  font-size: 15px;
+  font-family: inherit;
+  background: #fff;
+  transition: border-color 0.15s;
+}
+.input:focus { outline: none; border-color: #0f62fe; box-shadow: 0 0 0 2px rgba(15,98,254,0.15); }
+.textarea { width: 100%; padding: 10px 14px; border: 1px solid #dde1e7; border-radius: 4px; font-size: 15px; font-family: inherit; resize: vertical; }
+.textarea:focus { outline: none; border-color: #0f62fe; }
+
+/* Option Grid */
+.optionGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.optionCard {
+  padding: 20px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.optionCard:hover { border-color: #0f62fe; }
+.selected { border-color: #0f62fe !important; background: #eef3ff; }
+.optionTitle { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+.optionDesc { font-size: 13px; color: #57606a; }
+.stackIcon { font-size: 28px; margin-bottom: 10px; }
+
+/* Dropzone */
+.dropzone {
+  border: 2px dashed #c1c7cd;
+  border-radius: 8px;
+  padding: 48px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: #f7f8fa;
+  margin-bottom: 16px;
+}
+.dropzone:hover { border-color: #0f62fe; background: #eef3ff; }
+.dragOver { border-color: #0f62fe; background: #eef3ff; }
+.dropzoneContent { pointer-events: none; }
+.dropzoneIcon { font-size: 32px; margin-bottom: 12px; color: #697077; }
+
+/* File preview */
+.filePreview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #eef3ff;
+  border: 1px solid #d0e2ff;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+.fileIcon { font-size: 24px; }
+.fileName { font-weight: 600; font-size: 14px; }
+.removeBtn { margin-left: auto; background: none; border: none; color: #697077; font-size: 18px; cursor: pointer; padding: 4px 8px; }
+.removeBtn:hover { color: #da1e28; }
+
+/* Progress stages */
+.stageList { display: flex; flex-direction: column; gap: 12px; }
+.stageItem { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 6px; opacity: 0.4; background: #f7f8fa; font-size: 14px; }
+.stageActive { opacity: 1; background: #eef3ff; }
+.stageDone { opacity: 1; background: #defbe6; }
+.stageDot { font-size: 16px; min-width: 20px; text-align: center; }
+
+/* Success box */
+.successBox { text-align: center; padding: 32px; }
+.successIcon { font-size: 48px; color: #198038; margin-bottom: 16px; }
+
+/* Actions */
+.actions { display: flex; gap: 12px; margin-top: 16px; }
+
+/* Misc */
+.muted { color: #57606a; font-size: 13px; }
+.error { color: #da1e28; font-size: 13px; margin-top: 8px; padding: 8px 12px; background: #fff1f1; border-radius: 4px; }
+.warning { color: #8a3800; background: #fff1bc; padding: 12px; border-radius: 4px; margin-bottom: 16px; }
+.empty { text-align: center; padding: 48px; color: #57606a; }
+
+/* Artifact list */
+.artifactList { display: flex; flex-direction: column; gap: 4px; }
+.artifactItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border: 1px solid #f0f2f5;
+  background: #fafbfc;
+  transition: background 0.1s;
+}
+.artifactItem:hover { background: #f0f2f5; }
+.artifactIcon { font-family: monospace; color: #0f62fe; font-weight: 700; min-width: 28px; text-align: center; }
+.artifactInfo { flex: 1; }
+.artifactName { font-weight: 500; font-size: 14px; }
+
+/* Download grid */
+.downloadGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.downloadList { list-style: disc; padding-left: 20px; color: #57606a; font-size: 13px; line-height: 2; }
+
+/* LLM status banner */
+.llmBannerOk { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #defbe6; border: 1px solid #a7f0ba; border-radius: 6px; font-size: 13px; color: #0e6027; margin-bottom: 24px; }
+.llmBannerWarn { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fff1bc; border: 1px solid #f1c21b; border-radius: 6px; font-size: 13px; color: #8a3800; margin-bottom: 24px; }
+.llmBannerDot { font-size: 18px; line-height: 1; }

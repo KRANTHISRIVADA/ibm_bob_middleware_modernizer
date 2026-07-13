@@ -1,0 +1,45 @@
+{
+  "jobId": "d67f75e5-bd8c-4cfb-8d51-c4222600cfef",
+  "sourcePlatform": "DATAPOWER",
+  "complexity": "SIMPLE",
+  "executiveSummary": "Reverse engineering of DATAPOWER artifact. LLM not available — parsed metadata used as baseline. Manual review required.",
+  "interfaceInventory": [],
+  "endpointCatalog": [],
+  "sourceMappings": [],
+  "requestResponseSchemas": [],
+  "transformationMapping": [],
+  "routingDocument": [],
+  "securityAnalysis": {
+    "policies": [],
+    "notes": "Manual review required"
+  },
+  "errorHandling": [],
+  "nonFunctionalRequirements": {
+    "timeout": "Not specified",
+    "retry": "Not specified",
+    "rateLimit": "Not specified",
+    "logging": "Standard",
+    "throttling": "Not specified"
+  },
+  "complexityAssessment": {
+    "score": "SIMPLE",
+    "rationale": "Based on user-selected complexity",
+    "factors": []
+  },
+  "migrationRecommendation": {
+    "recommendedStack": "JAVA_SPRING_BOOT",
+    "rationale": "Default recommendation. LLM analysis required for detailed recommendation.",
+    "risks": [],
+    "estimatedEffort": "TBD"
+  },
+  "testScenarios": [],
+  "gaps": [
+    "LLM analysis not available - configure OPENAI_API_KEY or IBM watsonx credentials"
+  ],
+  "risks": [
+    "Manual review of all extracted metadata required"
+  ],
+  "recommendations": [
+    "Configure LLM provider for full AI-driven analysis"
+  ]
+}

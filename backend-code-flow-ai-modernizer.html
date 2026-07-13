@@ -1,0 +1,500 @@
+
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Backend Code &amp; Flow — AI Modernizer</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.6; background: #fff; color: #1f2328; }
+.page { max-width: 760px; margin: 0 auto; padding: 40px 24px 60px; }
+h1 { font-size: 22px; font-weight: 700; border-bottom: 2px solid #0f62fe; padding-bottom: 10px; margin-bottom: 6px; }
+.sub { color: #57606a; font-size: 13px; margin-bottom: 32px; }
+h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #57606a; margin: 32px 0 14px; }
+h3 { font-size: 15px; font-weight: 700; color: #1f2328; margin-bottom: 6px; }
+
+/* ── Layer diagram ── */
+.layers { display: flex; flex-direction: column; gap: 0; margin: 16px 0 28px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+.layer { display: flex; align-items: stretch; }
+.layer-label { writing-mode: vertical-lr; text-orientation: mixed; transform: rotate(180deg); background: #0f62fe; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 6px; display: flex; align-items: center; justify-content: center; min-width: 32px; }
+.layer-label.green { background: #198038; }
+.layer-label.teal  { background: #007d79; }
+.layer-label.purple{ background: #6929c4; }
+.layer-label.gray  { background: #697077; }
+.layer-body { flex: 1; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; background: #fafbfc; }
+.layer:last-child .layer-body { border-bottom: none; }
+.layer-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.layer-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; font-family: Consolas, monospace; }
+.tag.blue   { background: #d0e2ff; color: #0043ce; }
+.tag.green  { background: #defbe6; color: #044317; }
+.tag.teal   { background: #d9fbfb; color: #004144; }
+.tag.purple { background: #e8daff; color: #491d8b; }
+.tag.gray   { background: #f2f4f8; color: #697077; }
+.tag.orange { background: #fff2e8; color: #8a3800; }
+
+/* ── Flow steps ── */
+.flow { display: flex; flex-direction: column; gap: 0; margin: 12px 0; }
+.frow { display: flex; align-items: flex-start; gap: 0; }
+.fnum { min-width: 32px; height: 32px; border-radius: 50%; background: #0f62fe; color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+.fnum.green { background: #198038; }
+.fnum.orange { background: #d06f00; }
+.fconn { width: 2px; background: #d0e2ff; margin: 0 15px; min-height: 20px; }
+.fbody { flex: 1; padding: 0 0 16px 14px; }
+.ftitle { font-weight: 600; font-size: 14px; }
+.fdesc { font-size: 13px; color: #444d56; margin-top: 2px; }
+.ffile { font-family: Consolas, monospace; font-size: 11px; color: #0f62fe; background: #eef3ff; padding: 1px 6px; border-radius: 3px; margin-top: 4px; display: inline-block; }
+
+/* ── Module cards ── */
+.module-grid { display: flex; flex-direction: column; gap: 12px; margin: 12px 0; }
+.module { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+.module-head { background: #f7f8fa; padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e5e7eb; }
+.module-icon { font-size: 18px; }
+.module-title { font-weight: 700; font-size: 14px; }
+.module-path { font-family: Consolas, monospace; font-size: 11px; color: #57606a; }
+.module-body { padding: 12px 16px; font-size: 13px; color: #444d56; }
+.module-body ul { padding-left: 18px; }
+.module-body li { margin-bottom: 3px; }
+.module-body table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+.module-body th { background: #f0f2f5; padding: 5px 8px; text-align: left; font-weight: 600; color: #57606a; }
+.module-body td { padding: 5px 8px; border-top: 1px solid #f0f2f5; vertical-align: top; }
+.module-body code { background: #f0f2f5; padding: 1px 5px; border-radius: 3px; font-family: Consolas, monospace; font-size: 11px; }
+
+/* ── State machine ── */
+.states { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.state { border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; }
+.s-gray   { background: #f2f4f8; color: #697077; }
+.s-blue   { background: #d0e2ff; color: #0043ce; }
+.s-yellow { background: #fff1bc; color: #8a3800; }
+.s-green  { background: #defbe6; color: #044317; }
+.s-teal   { background: #d9fbfb; color: #004144; }
+.s-red    { background: #ffd7d9; color: #750e13; }
+.arrow { color: #697077; font-size: 16px; display: flex; align-items: center; }
+
+pre { background: #161616; color: #f4f4f4; border-radius: 6px; padding: 12px 16px; font-family: Consolas, monospace; font-size: 12px; line-height: 1.9; overflow-x: auto; margin: 8px 0; }
+.g { color: #42be65; } .b { color: #78a9ff; } .y { color: #f1c21b; } .c { color: #6f6f6f; }
+.info { background: #eef3ff; border: 1px solid #d0e2ff; border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #0043ce; margin: 10px 0; }
+hr { border: none; border-top: 1px solid #e5e7eb; margin: 28px 0; }
+.footer { text-align: center; font-size: 11px; color: #8d8d8d; border-top: 1px solid #e5e7eb; padding-top: 16px; margin-top: 32px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>⬡ Backend Code &amp; Flow</h1>
+  <p class="sub">Complete walkthrough of every module — what it does, where it lives, and how data flows through it</p>
+
+  
+  <h2>1 · Layer Architecture</h2>
+  <div class="layers">
+    <div class="layer">
+      <div class="layer-label">Entry</div>
+      <div class="layer-body">
+        <div class="layer-title">HTTP Layer — request comes in</div>
+        <div class="layer-files">
+          <span class="tag blue">server.js</span>
+          <span class="tag blue">routes/jobs.js</span>
+          <span class="tag gray">middleware/validators.js</span>
+          <span class="tag gray">middleware/auditLogger.js</span>
+          <span class="tag gray">middleware/errorHandler.js</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="layer-label green">Control</div>
+      <div class="layer-body">
+        <div class="layer-title">Controller Layer — validate, orchestrate, respond</div>
+        <div class="layer-files">
+          <span class="tag green">controllers/jobController.js</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="layer-label teal">Logic</div>
+      <div class="layer-body">
+        <div class="layer-title">Orchestration Layer — the main processing pipeline</div>
+        <div class="layer-files">
+          <span class="tag teal">jobs/jobOrchestrator.js</span>
+          <span class="tag teal">parsers/apicParser.js</span>
+          <span class="tag teal">parsers/datapowerParser.js</span>
+          <span class="tag teal">parsers/iibAceParser.js</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="layer-label purple">AI</div>
+      <div class="layer-body">
+        <div class="layer-title">LLM Layer — AI analysis and code generation</div>
+        <div class="layer-files">
+          <span class="tag purple">llm/llmClient.js</span>
+          <span class="tag purple">llm/prompts.js</span>
+          <span class="tag purple">llm/schemaValidator.js</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="layer-label orange" style="background:#d06f00">Output</div>
+      <div class="layer-body">
+        <div class="layer-title">Artifact &amp; Storage Layer — write files, persist state</div>
+        <div class="layer-files">
+          <span class="tag orange">artifacts/artifactBuilder.js</span>
+          <span class="tag orange">config/database.js</span>
+          <span class="tag gray">utils/logger.js</span>
+          <span class="tag gray">utils/security.js</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+  <h2>2 · Job Status State Machine</h2>
+  <p style="font-size:13px;color:#57606a;margin-bottom:10px">Every job moves through these states stored in SQLite. The frontend polls <code>GET /status</code> to track progress.</p>
+  <div class="states">
+    <span class="state s-gray">CREATED</span>
+    <span class="arrow">→</span>
+    <span class="state s-blue">UPLOADED</span>
+    <span class="arrow">→</span>
+    <span class="state s-yellow">RE_IN_PROGRESS</span>
+    <span class="arrow">→</span>
+    <span class="state s-green">RE_COMPLETE</span>
+    <span class="arrow">→</span>
+    <span class="state s-yellow">GEN_IN_PROGRESS</span>
+    <span class="arrow">→</span>
+    <span class="state s-teal">GEN_COMPLETE</span>
+  </div>
+  <div class="states" style="margin-top:4px">
+    <span style="font-size:12px;color:#57606a">Error paths:</span>
+    <span class="state s-yellow">RE_IN_PROGRESS</span>
+    <span class="arrow">→</span>
+    <span class="state s-red">RE_FAILED</span>
+    <span style="font-size:12px;color:#aaa;margin:0 8px">·</span>
+    <span class="state s-yellow">GEN_IN_PROGRESS</span>
+    <span class="arrow">→</span>
+    <span class="state s-red">GEN_FAILED</span>
+  </div>
+
+  
+  <h2>3 · Reverse Engineering Request Flow</h2>
+  <p style="font-size:13px;color:#57606a;margin-bottom:12px">What happens from the moment <code>POST /api/jobs/:id/reverse-engineer</code> is called:</p>
+
+  <div class="flow">
+    <div class="frow">
+      <div class="fnum">1</div>
+      <div class="fbody">
+        <div class="ftitle">HTTP Request enters Express</div>
+        <div class="fdesc">Helmet adds security headers. Morgan logs the request. Rate limiter checks 200 req/15min quota. auditLogger wraps <code>res.json</code> to intercept the response.</div>
+        <div class="ffile">server.js → middleware stack</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum">2</div>
+      <div class="fbody">
+        <div class="ftitle">Router matches the route</div>
+        <div class="fdesc"><code>router.post('/jobs/:jobId/reverse-engineer')</code> matches. No multer on this route — it's just JSON. Calls <code>triggerReverseEngineer</code>.</div>
+        <div class="ffile">routes/jobs.js : line 39</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum">3</div>
+      <div class="fbody">
+        <div class="ftitle">Controller validates state &amp; fires async</div>
+        <div class="fdesc">Looks up the job in SQLite. Guards: job must exist and status must be <code>UPLOADED</code> or <code>RE_FAILED</code>. Sets status to <code>RE_IN_PROGRESS</code>. Calls <code>jobOrchestrator.runReverseEngineer(jobId)</code> — <strong>without awaiting it</strong>. Returns <code>202</code>-style JSON immediately so the UI isn't blocked.</div>
+        <div class="ffile">controllers/jobController.js : triggerReverseEngineer()</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum">4</div>
+      <div class="fbody">
+        <div class="ftitle">Orchestrator: find + parse the uploaded file</div>
+        <div class="fdesc">Reads <code>uploads/&lt;jobId&gt;/</code> to find the file. Dispatches to the correct parser based on <code>job.sourcePlatform</code>.</div>
+        <div class="ffile">jobs/jobOrchestrator.js : runReverseEngineer()</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum">5</div>
+      <div class="fbody">
+        <div class="ftitle">Parser extracts structured metadata</div>
+        <div class="fdesc">
+          <strong>APIC:</strong> reads YAML with js-yaml → extracts endpoints, security schemes, x-ibm-configuration backend URLs, schemas.<br />
+          <strong>DataPower:</strong> opens ZIP with adm-zip → parses XML configs with xml2js → extracts MPGW/WSP services, XSLT files, GatewayScripts, crypto.<br />
+          <strong>IIB/ACE:</strong> opens ZIP → parses .msgflow XML, .esql text, .wsdl, .xsd, .properties files.
+        </div>
+        <div class="ffile">parsers/apicParser.js · datapowerParser.js · iibAceParser.js</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum">6</div>
+      <div class="fbody">
+        <div class="ftitle">Prompt builder wraps metadata into LLM instructions</div>
+        <div class="fdesc">Selects the correct prompt function (APIC/DataPower/IIB). Injects the parsed metadata JSON and the complexity level into a structured prompt. Returns a <code>{ system, user }</code> object.</div>
+        <div class="ffile">llm/prompts.js : buildAPICPrompt() / buildDataPowerPrompt() / buildIIBACEPrompt()</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum">7</div>
+      <div class="fbody">
+        <div class="ftitle">LLM Client calls OpenAI / watsonx</div>
+        <div class="fdesc">Reads <code>LLM_PROVIDER</code> env var. <strong>OpenAI path:</strong> POSTs to <code>/v1/chat/completions</code> with <code>response_format: json_object</code> — forces a pure JSON response. <strong>watsonx path:</strong> exchanges IBM API key for IAM bearer token first, then calls Granite model. <strong>Fallback:</strong> if no API key is configured (or call fails), builds stub data from the parsed metadata instead — the app never crashes.</div>
+        <div class="ffile">llm/llmClient.js : invokeLLM() → invokeOpenAI() / invokeWatsonX()</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum">8</div>
+      <div class="fbody">
+        <div class="ftitle">Schema validator checks LLM output</div>
+        <div class="fdesc">Runs jsonschema validation against a required-field schema. Logs warnings if fields are missing but does not abort — partial data still produces useful artifacts.</div>
+        <div class="ffile">llm/schemaValidator.js : validateRE()</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum green">9</div>
+      <div class="fbody">
+        <div class="ftitle">Artifact Builder writes 14 Markdown + JSON files to disk</div>
+        <div class="fdesc">Creates <code>artifacts/&lt;jobId&gt;/reverse/</code>. Calls a dedicated builder function for each of the 14 document types — each renders the LLM JSON into readable Markdown tables and prose. Also writes <code>full-reverse-engineering.json</code> — the master file re-used by code generation.</div>
+        <div class="ffile">artifacts/artifactBuilder.js : buildArtifacts()</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum green">10</div>
+      <div class="fbody">
+        <div class="ftitle">DB updated → frontend poll detects completion</div>
+        <div class="fdesc">Sets job status to <code>RE_COMPLETE</code> in SQLite. The frontend is polling <code>GET /status</code> every 3 seconds — it detects the new status and navigates to the artifact viewer.</div>
+        <div class="ffile">config/database.js : updateJob() → jobs table</div>
+      </div>
+    </div>
+  </div>
+
+  
+  <h2>4 · Code Generation Flow</h2>
+  <p style="font-size:13px;color:#57606a;margin-bottom:10px">Triggered by <code>POST /api/jobs/:id/generate</code> with body <code>{ "targetStack": "JAVA_SPRING_BOOT" }</code></p>
+
+  <div class="flow">
+    <div class="frow">
+      <div class="fnum">1</div>
+      <div class="fbody">
+        <div class="ftitle">Controller guards RE_COMPLETE status</div>
+        <div class="fdesc">Job must be <code>RE_COMPLETE</code> or <code>GEN_FAILED</code>. Stores <code>targetStack</code> on the job record. Fires <code>runGenerate(jobId, targetStack)</code> async.</div>
+        <div class="ffile">controllers/jobController.js : triggerGenerate()</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum">2</div>
+      <div class="fbody">
+        <div class="ftitle">Orchestrator loads RE JSON as input</div>
+        <div class="fdesc">Reads <code>artifacts/&lt;jobId&gt;/reverse/full-reverse-engineering.json</code> — the complete reverse engineering specification produced in step 9 above. This is the LLM's "requirements document" for generation.</div>
+        <div class="ffile">jobs/jobOrchestrator.js : runGenerate()</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum">3</div>
+      <div class="fbody">
+        <div class="ftitle">Generation prompt injects the full RE spec</div>
+        <div class="fdesc">Selects <code>buildSpringBootPrompt</code>, <code>buildNodeJSPrompt</code>, or <code>buildPythonPrompt</code>. Embeds the entire RE JSON and asks the LLM to return a <code>{ "files": [{ "path", "content" }] }</code> array covering controllers, services, mappers, tests, Dockerfile, k8s YAML, etc.</div>
+        <div class="ffile">llm/prompts.js : buildSpringBootPrompt() / buildNodeJSPrompt() / buildPythonPrompt()</div>
+      </div>
+    </div>
+    <div class="frow"><div class="fconn" style="margin-left:15px;margin-right:0"></div></div>
+
+    <div class="frow">
+      <div class="fnum green">4</div>
+      <div class="fbody">
+        <div class="ftitle">LLM response validated → files written to disk safely</div>
+        <div class="fdesc">Schema validates <code>genData.files</code> array. Each file path is sanitised with a path-traversal strip (<code>../</code> removed). Files are written to <code>artifacts/&lt;jobId&gt;/generated/</code>. Status set to <code>GEN_COMPLETE</code>.</div>
+        <div class="ffile">jobs/jobOrchestrator.js : lines 86–100</div>
+      </div>
+    </div>
+  </div>
+
+  
+  <h2>5 · All 9 API Endpoints at a Glance</h2>
+  <div class="module">
+    <div class="module-body" style="padding:0">
+      <table style="margin:0">
+        <thead><tr><th>Method</th><th>Route</th><th>What it does</th><th>Async?</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST</code></td><td><code>/api/jobs</code></td><td>Validates body, creates UUID job, saves to SQLite → returns jobId</td><td>No</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/jobs</code></td><td>Returns all jobs ordered by createdAt DESC</td><td>No</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/jobs/:id</code></td><td>Returns single job record</td><td>No</td></tr>
+          <tr><td><code>POST</code></td><td><code>/api/jobs/:id/upload</code></td><td>Multer saves file to <code>uploads/&lt;jobId&gt;/</code>. Updates status → UPLOADED</td><td>No</td></tr>
+          <tr><td><code>POST</code></td><td><code>/api/jobs/:id/reverse-engineer</code></td><td>Fires async RE pipeline. Returns immediately with RE_IN_PROGRESS</td><td><strong>Yes</strong></td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/jobs/:id/status</code></td><td>Lightweight poll — returns status + error field. Frontend calls this every 3s</td><td>No</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/jobs/:id/reverse-artifacts</code></td><td>Lists files in <code>artifacts/&lt;id&gt;/reverse/</code> with sizes</td><td>No</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/jobs/:id/reverse-artifacts/download</code></td><td>Streams a ZIP of all reverse artifacts using archiver (no temp file)</td><td>No</td></tr>
+          <tr><td><code>POST</code></td><td><code>/api/jobs/:id/generate</code></td><td>Fires async generation pipeline. Returns immediately with GEN_IN_PROGRESS</td><td><strong>Yes</strong></td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/jobs/:id/generated/download</code></td><td>Streams a ZIP of the generated microservice project</td><td>No</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  
+  <h2>6 · Module-by-Module Reference</h2>
+  <div class="module-grid">
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">🚪</span><div><div class="module-title">server.js</div><div class="module-path">backend/src/server.js</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li>Entry point — bootstraps Express</li>
+          <li>Applies middleware in order: Helmet → CORS → JSON parser → Morgan logger → Rate limiter (200/15min) → Audit logger → Routes → 404 → Error handler</li>
+          <li><code>start()</code> is async because <code>db.init()</code> loads the sql.js WASM before the server listens</li>
+          <li><code>require.main === module</code> guard lets tests import <code>app</code> without starting the server</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">🗺</span><div><div class="module-title">routes/jobs.js</div><div class="module-path">backend/src/routes/jobs.js</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li>Declares all 9 route handlers in one place</li>
+          <li>Configures <strong>Multer</strong> with disk storage — saves file as its original name under <code>uploads/&lt;jobId&gt;/</code></li>
+          <li><strong>File filter</strong> blocks anything not in: <code>.yaml .yml .json .zip .wsdl .xsd .xml</code></li>
+          <li>Size limit read from <code>MAX_UPLOAD_SIZE_MB</code> env var (default 50 MB)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">🎮</span><div><div class="module-title">controllers/jobController.js</div><div class="module-path">backend/src/controllers/jobController.js</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li>One function per route — keeps routes thin</li>
+          <li><strong>Fire-and-forget pattern</strong>: both <code>triggerReverseEngineer</code> and <code>triggerGenerate</code> call the orchestrator with <code>.catch()</code> instead of <code>await</code> — status updates happen via the DB, not the HTTP response</li>
+          <li>ZIP downloads use <strong>archiver</strong> piped directly to <code>res</code> — no temp ZIP file created on disk</li>
+          <li>All functions wrapped in <code>try/catch → next(err)</code> so errors flow to the error handler middleware</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">🔧</span><div><div class="module-title">jobs/jobOrchestrator.js</div><div class="module-path">backend/src/jobs/jobOrchestrator.js</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li>The main processing brain — coordinates parse → LLM → validate → write</li>
+          <li><code>runReverseEngineer()</code>: parse → build prompt → call LLM (or fallback) → validate → buildArtifacts → update DB</li>
+          <li><code>runGenerate()</code>: load RE JSON → build prompt → call LLM (or fallback) → validate → write each file safely → update DB</li>
+          <li><strong>Fallback builders</strong> (<code>buildFallbackRE</code>, <code>buildFallbackGen</code>) ensure the app never errors out without an API key — they extract whatever the parser found and fill the rest with placeholder text</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">🔍</span><div><div class="module-title">parsers/apicParser.js</div><div class="module-path">backend/src/parsers/</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li><strong>APIC</strong>: uses <code>js-yaml</code> to load YAML/JSON. Walks <code>paths</code> object to extract every endpoint. Reads <code>x-ibm-configuration.assembly.execute</code> to find backend invoke URLs</li>
+          <li><strong>DataPower</strong>: uses <code>adm-zip</code> to iterate ZIP entries. XML files parsed with <code>xml2js</code>. Extracts MPGW/WSP service names, backend URLs, crypto identity credentials, stylesheet variables</li>
+          <li><strong>IIB/ACE</strong>: opens ZIP, parses <code>.msgflow</code> XML to extract node graph, parses <code>.esql</code> with regex to find MODULE definitions, walks <code>.properties</code> files for endpoint URLs</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">🤖</span><div><div class="module-title">llm/llmClient.js</div><div class="module-path">backend/src/llm/llmClient.js</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li>Single entry: <code>invokeLLM(systemPrompt, userPrompt)</code> — dispatches based on <code>LLM_PROVIDER</code> env var</li>
+          <li><strong>OpenAI</strong>: uses <code>response_format: { type: "json_object" }</code> — guarantees valid JSON back, no regex parsing needed. Temperature 0.1 for deterministic output.</li>
+          <li><strong>watsonx</strong>: first POSTs to IBM IAM to exchange API key for a bearer token, then calls Granite model. Extracts JSON from response text with a regex since watsonx doesn't have a JSON mode</li>
+          <li>Both paths time out at 120 seconds</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">📝</span><div><div class="module-title">llm/prompts.js</div><div class="module-path">backend/src/llm/prompts.js</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li>6 prompt builder functions: 3 for reverse engineering (one per platform) + 3 for code generation (one per target stack)</li>
+          <li>Each RE prompt embeds the full parsed metadata JSON and an exact JSON schema the LLM must fill — field names, types, and allowed enum values are all specified</li>
+          <li>Each Gen prompt embeds the full RE specification JSON and lists exactly which files to generate with their directory structure</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">📄</span><div><div class="module-title">artifacts/artifactBuilder.js</div><div class="module-path">backend/src/artifacts/artifactBuilder.js</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li>Takes the LLM JSON output and renders 14 Markdown files + 1 full JSON file to <code>artifacts/&lt;jobId&gt;/reverse/</code></li>
+          <li>Each of the 14 build functions reads specific fields from the LLM output and formats them as Markdown tables or prose</li>
+          <li>Returns the list of filenames written — logged by the orchestrator</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">🗄</span><div><div class="module-title">config/database.js</div><div class="module-path">backend/src/config/database.js</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li>Uses <strong>sql.js</strong> — pure JavaScript SQLite (no native binary, no Visual Studio needed)</li>
+          <li><code>init()</code> is async because sql.js loads a WASM file. If the DB file exists it loads it from disk; otherwise creates fresh</li>
+          <li>After every write (<code>saveJob</code>, <code>updateJob</code>, <code>saveAuditLog</code>), calls <code>persist()</code> which exports the in-memory DB back to disk as a binary file</li>
+          <li>Two tables: <code>jobs</code> (job state) and <code>audit_logs</code> (event trail)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span class="module-icon">🛡</span><div><div class="module-title">middleware/auditLogger.js</div><div class="module-path">backend/src/middleware/auditLogger.js</div></div></div>
+      <div class="module-body">
+        <ul>
+          <li>Wraps <code>res.json</code> to intercept every JSON response <strong>after</strong> it's written</li>
+          <li>Maps route patterns to event names (JOB_CREATED, FILE_UPLOADED, RE_TRIGGERED, etc.)</li>
+          <li>Only records events for successful responses (status &lt; 400)</li>
+          <li>Saves jobId, event name, request path, and client IP to <code>audit_logs</code> table</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  
+  <h2>7 · File System Layout (runtime)</h2>
+  <pre><span class="b">backend/</span>
+├── <span class="g">uploads/</span>
+│   └── <span class="y">&lt;jobId&gt;/</span>
+│       └── customer-api.yaml        <span class="c">← uploaded source file</span>
+├── <span class="g">artifacts/</span>
+│   └── <span class="y">&lt;jobId&gt;/</span>
+│       ├── <span class="b">reverse/</span>
+│       │   ├── 01-executive-summary.md
+│       │   ├── 02-interface-inventory.md
+│       │   ├── ...  (14 documents total)
+│       │   └── full-reverse-engineering.json   <span class="c">← LLM output, reused by gen</span>
+│       └── <span class="b">generated/</span>
+│           ├── pom.xml               <span class="c">← Spring Boot files from LLM</span>
+│           ├── src/main/java/...
+│           └── Dockerfile
+└── <span class="g">data/</span>
+    └── modernizer.db                 <span class="c">← SQLite (binary, sql.js format)</span></pre>
+
+  <div class="info">ℹ All paths are scoped by <code>jobId</code> (a UUID) — no two jobs ever touch each other's files. Path traversal is prevented in the generator by stripping <code>../</code> from any LLM-generated file paths before writing.</div>
+
+  <p class="footer">Made with IBM Bob</p>
+</div>
+</body>
+</html>

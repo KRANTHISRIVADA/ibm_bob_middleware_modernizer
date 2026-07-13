@@ -1,0 +1,45 @@
+{
+  "jobId": "sample-job-001",
+  "sourcePlatform": "APIC",
+  "complexity": "INTERMEDIATE",
+  "apiTitle": "Customer Account API",
+  "apiVersion": "1.2.0",
+  "executiveSummary": "The Customer Account API is an IBM API Connect-managed REST API providing CRUD operations on customer records. It uses OAuth2 client credentials for authentication and routes all requests to a single backend microservice. Migration complexity is INTERMEDIATE due to OAuth2 flow, pagination, and error handling requirements.",
+  "interfaceInventory": [
+    { "name": "listCustomers", "type": "REST", "description": "List all customers with pagination" },
+    { "name": "createCustomer", "type": "REST", "description": "Create a new customer record" },
+    { "name": "getCustomer", "type": "REST", "description": "Retrieve single customer by ID" },
+    { "name": "updateCustomer", "type": "REST", "description": "Update an existing customer record" },
+    { "name": "deleteCustomer", "type": "REST", "description": "Delete a customer record" }
+  ],
+  "endpointCatalog": [
+    { "method": "GET", "path": "/customers", "operationId": "listCustomers", "summary": "List all customers", "security": ["OAuth2:read"], "backendUrl": "https://customers-backend.internal:8080/customers" },
+    { "method": "POST", "path": "/customers", "operationId": "createCustomer", "summary": "Create a customer", "security": ["OAuth2:write"], "backendUrl": "https://customers-backend.internal:8080/customers" },
+    { "method": "GET", "path": "/customers/{customerId}", "operationId": "getCustomer", "summary": "Get customer by ID", "security": ["OAuth2:read"], "backendUrl": "https://customers-backend.internal:8080/customers/{customerId}" },
+    { "method": "PUT", "path": "/customers/{customerId}", "operationId": "updateCustomer", "summary": "Update customer", "security": ["OAuth2:write"], "backendUrl": "https://customers-backend.internal:8080/customers/{customerId}" },
+    { "method": "DELETE", "path": "/customers/{customerId}", "operationId": "deleteCustomer", "summary": "Delete customer", "security": ["OAuth2:write"], "backendUrl": "https://customers-backend.internal:8080/customers/{customerId}" }
+  ],
+  "securityAnalysis": {
+    "policies": ["OAuth2"],
+    "oauth": true,
+    "oauthFlows": ["clientCredentials"],
+    "apiKeys": [],
+    "mtls": false,
+    "jwt": false,
+    "notes": "OAuth2 client credentials flow with scopes: read, write. Token URL: https://auth.example.com/oauth/token"
+  },
+  "complexityAssessment": {
+    "score": "INTERMEDIATE",
+    "rationale": "Single backend target, OAuth2 security, pagination, and standard error handling. No XSLT transformations or complex routing.",
+    "factors": ["OAuth2 client credentials", "Pagination", "UUID path parameters", "CORS enabled", "Rate limiting (429 response)"]
+  },
+  "migrationRecommendation": {
+    "recommendedStack": "JAVA_SPRING_BOOT",
+    "rationale": "Java Spring Boot provides production-ready OAuth2 resource server support, WebClient for backend proxying, and strong typing that matches the OpenAPI contract.",
+    "risks": ["Backend SSL certificate configuration", "OAuth2 token validation setup"],
+    "estimatedEffort": "3-5 days for an experienced developer"
+  },
+  "gaps": [],
+  "risks": ["Backend service URL may change in target environment"],
+  "recommendations": ["Externalize all backend URLs to application.yml", "Implement circuit breaker on backend calls", "Add distributed tracing correlation ID"]
+}

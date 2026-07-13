@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+.env
+uploads
+artifacts
+data
+tests
+*.db
+.DS_Store
