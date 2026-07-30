@@ -13,6 +13,7 @@ const { errorHandler } = require('./middleware/errorHandler');
 const { auditLogger } = require('./middleware/auditLogger');
 const logger = require('./utils/logger');
 const db = require('./config/database');
+const { ensureIndex } = require('./rag/ragStore');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -59,6 +60,8 @@ app.use(errorHandler);
 // Start server (async because db.init() is async)
 async function start() {
   await db.init();
+  // Warm up RAG index at startup so first request doesn't pay the build cost
+  ensureIndex();
   app.listen(PORT, () => {
     logger.info(`AI Modernizer backend running on port ${PORT}`);
   });

@@ -8,6 +8,7 @@ const { validateRE, validateGen } = require('../llm/schemaValidator');
 const { buildArtifacts } = require('../artifacts/artifactBuilder');
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const { retrieveForRE, retrieveForGen } = require('../rag/ragRetriever');
 
 async function runReverseEngineer(jobId) {
   logger.info(`Starting reverse engineering for job ${jobId}`);
@@ -25,11 +26,15 @@ async function runReverseEngineer(jobId) {
   logger.info(`Parsing ${job.sourcePlatform} file: ${files[0]}`);
   const parsedData = await parseSource(jobId, job.sourcePlatform, filePath);
 
-  // Build prompt
+  // ── RAG: retrieve domain knowledge relevant to this source artifact ──────
+  logger.info(`RAG: retrieving domain knowledge for ${job.sourcePlatform} RE`);
+  const ragContext = retrieveForRE(parsedData, job.sourcePlatform);
+
+  // Build prompt — inject RAG context as additional system knowledge
   let prompt;
-  if (job.sourcePlatform === 'APIC') prompt = prompts.buildAPICPrompt(parsedData, job.complexity);
-  else if (job.sourcePlatform === 'DATAPOWER') prompt = prompts.buildDataPowerPrompt(parsedData, job.complexity);
-  else prompt = prompts.buildIIBACEPrompt(parsedData, job.complexity);
+  if (job.sourcePlatform === 'APIC') prompt = prompts.buildAPICPrompt(parsedData, job.complexity, ragContext);
+  else if (job.sourcePlatform === 'DATAPOWER') prompt = prompts.buildDataPowerPrompt(parsedData, job.complexity, ragContext);
+  else prompt = prompts.buildIIBACEPrompt(parsedData, job.complexity, ragContext);
 
   // Invoke LLM
   logger.info(`Invoking LLM for reverse engineering job ${jobId}`);
@@ -60,29 +65,60 @@ async function runGenerate(jobId, targetStack) {
   const job = db.getJob(jobId);
   if (!job) throw new Error('Job not found');
 
-  // Load RE artifact
-  const reJsonPath = path.join(__dirname, '../../artifacts', jobId, 'reverse', 'full-reverse-engineering.json');
+  // Load RE artifacts
+  const reverseDir = path.join(__dirname, '../../artifacts', jobId, 'reverse');
+  const reJsonPath = path.join(reverseDir, 'full-reverse-engineering.json');
   if (!fs.existsSync(reJsonPath)) throw new Error('Reverse engineering artifacts not found. Run reverse engineering first.');
   const reData = JSON.parse(fs.readFileSync(reJsonPath, 'utf8'));
 
-  // Build prompt
-  let prompt;
-  if (targetStack === 'JAVA_SPRING_BOOT') prompt = prompts.buildSpringBootPrompt(reData, job.complexity);
-  else if (targetStack === 'NODEJS') prompt = prompts.buildNodeJSPrompt(reData, job.complexity);
-  else if (targetStack === 'PYTHON_FASTAPI') prompt = prompts.buildPythonPrompt(reData, job.complexity);
+  // Build a rich context object from the RE structured JSON + individual markdown artifacts.
+  // Each markdown file captures a dedicated RE section — feeding them alongside the JSON
+  // gives the LLM the full picture without relying on it to parse one monolithic blob.
+  const reContext = buildREContext(reverseDir, reData);
+
+  // ── RAG: retrieve code generation patterns for this stack + platform ──────
+  logger.info(`RAG: retrieving codegen patterns for ${targetStack}`);
+  const ragContext = retrieveForGen(reContext, targetStack);
+
+  // Build prompt(s) with RAG context injected.
+  // Spring Boot returns an ARRAY of batch prompts (A/B/C) to stay within token limits.
+  // Node.js and Python return a single prompt object.
+  let promptOrBatches;
+  if (targetStack === 'JAVA_SPRING_BOOT') promptOrBatches = prompts.buildSpringBootPrompt(reContext, job.complexity, ragContext);
+  else if (targetStack === 'NODEJS')       promptOrBatches = prompts.buildNodeJSPrompt(reContext, job.complexity, ragContext);
+  else if (targetStack === 'PYTHON_FASTAPI') promptOrBatches = prompts.buildPythonPrompt(reContext, job.complexity, ragContext);
   else throw new Error(`Unknown targetStack: ${targetStack}`);
 
-  // Invoke LLM
+  // Invoke LLM — jsonMode:false because code-gen produces large multi-line file content.
+  // Spring Boot calls LLM once per batch and merges all files[] arrays.
   logger.info(`Invoking LLM for code generation job ${jobId}`);
   let genData;
   try {
-    genData = await invokeLLM(prompt.system, prompt.user);
+    const batches = Array.isArray(promptOrBatches) ? promptOrBatches : [promptOrBatches];
+    const allFiles = [];
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      // Pause between batches to avoid Groq/OpenAI per-minute rate limits (free tier = ~30 RPM).
+      // First batch runs immediately; subsequent batches wait 3 seconds.
+      if (i > 0) await sleep(3000);
+      logger.info(`LLM batch ${batch.batch || 'single'} (${i + 1}/${batches.length}) for job ${jobId}`);
+      // Retry once on 429 after a longer back-off
+      const batchResult = await invokeLLMWithRetry(batch.system, batch.user, { jsonMode: false }, logger);
+      if (batchResult.files && Array.isArray(batchResult.files)) {
+        logger.info(`Batch ${batch.batch || 'single'} returned ${batchResult.files.length} files`);
+        allFiles.push(...batchResult.files);
+      } else {
+        logger.warn(`Batch ${batch.batch || 'single'} returned unexpected shape — skipping`);
+      }
+    }
+    if (allFiles.length === 0) throw new Error('All batches returned empty file lists');
+    genData = { files: allFiles };
   } catch (llmErr) {
     logger.warn(`LLM failed, using fallback stub: ${llmErr.message}`);
     genData = buildFallbackGen(targetStack, reData);
   }
 
-  // Validate
+  // Validate merged output
   const validation = validateGen(genData);
   if (!validation.valid) {
     logger.warn(`Gen validation failed for ${jobId}: ${validation.errors.join(', ')} — using fallback stub`);
@@ -140,6 +176,100 @@ function buildFallbackGen(targetStack, reData) {
     files.push({ path: 'requirements.txt', content: 'fastapi\nuvicorn\npydantic\n' });
   }
   return { files };
+}
+
+/**
+ * Assembles a rich, focused code-generation context from:
+ *  - The structured fields of full-reverse-engineering.json  (endpoints, schemas, security, NFR, etc.)
+ *  - The individual markdown artifact files                  (human-readable RE sections as text)
+ *
+ * Noise fields (jobId, raw openApiSpec blob) are stripped to keep token count in check.
+ * Every code-generation prompt receives this single object instead of the raw RE JSON.
+ */
+function buildREContext(reverseDir, reData) {
+  // 1. Structured fields — strip noise, keep everything the code generator needs
+  const structured = {
+    sourcePlatform:           reData.sourcePlatform,
+    complexity:               reData.complexity,
+    apiTitle:                 reData.apiTitle || reData.services?.[0]?.name || 'GeneratedService',
+    apiVersion:               reData.apiVersion || '1.0.0',
+    executiveSummary:         reData.executiveSummary || '',
+    interfaceInventory:       reData.interfaceInventory       || [],
+    endpointCatalog:          reData.endpointCatalog          || [],
+    sourceMappings:           reData.sourceMappings           || [],
+    requestResponseSchemas:   reData.requestResponseSchemas   || [],
+    transformationMapping:    reData.transformationMapping    || reData.xsltTransformations || [],
+    routingDocument:          reData.routingDocument          || [],
+    securityAnalysis:         reData.securityAnalysis         || {},
+    errorHandling:            reData.errorHandling            || [],
+    nonFunctionalRequirements:reData.nonFunctionalRequirements|| {},
+    complexityAssessment:     reData.complexityAssessment     || {},
+    migrationRecommendation:  reData.migrationRecommendation  || {},
+    testScenarios:            reData.testScenarios            || [],
+    gaps:                     reData.gaps                     || [],
+    risks:                    reData.risks                    || [],
+    recommendations:          reData.recommendations          || [],
+    // Platform-specific extras
+    services:                 reData.services                 || [],   // DataPower MPGW/WSP
+    messageFlows:             reData.messageFlows             || [],   // IIB/ACE
+    esqlModules:              reData.esqlModules              || [],   // IIB/ACE
+    xsltTransformations:      reData.xsltTransformations      || [],   // DataPower
+    gatewayScripts:           reData.gatewayScripts           || [],   // DataPower
+  };
+
+  // 2. Individual artifact markdown files — read each one so the LLM sees
+  //    the already-formatted RE output section by section
+  const artifactFiles = [
+    '01-executive-summary.md',
+    '02-interface-inventory.md',
+    '03-endpoint-catalog.md',
+    '04-source-target-mapping.md',
+    '05-request-response-schemas.md',
+    '06-transformation-mapping.md',
+    '07-routing-document.md',
+    '08-security-analysis.md',
+    '09-error-handling.md',
+    '10-non-functional-requirements.md',
+    '11-complexity-assessment.md',
+    '12-migration-recommendation.md',
+    '13-test-scenarios.md',
+  ];
+
+  const artifacts = {};
+  for (const filename of artifactFiles) {
+    const fullPath = require('path').join(reverseDir, filename);
+    if (fs.existsSync(fullPath)) {
+      const key = filename.replace(/^\d+-/, '').replace('.md', '').replace(/-/g, '_');
+      artifacts[key] = fs.readFileSync(fullPath, 'utf8');
+    }
+  }
+
+  return { structured, artifacts };
+}
+
+/** Waits ms milliseconds */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Calls invokeLLM and retries once on HTTP 429 (rate limit).
+ * Reads Retry-After header if present, otherwise backs off 15 seconds.
+ */
+async function invokeLLMWithRetry(system, user, options, log) {
+  try {
+    return await invokeLLM(system, user, options);
+  } catch (err) {
+    const status = err.response?.status;
+    if (status === 429) {
+      const retryAfter = parseInt(err.response?.headers?.['retry-after'] || '15', 10);
+      const waitMs = (retryAfter + 2) * 1000;   // add 2s buffer
+      log.warn(`Rate limited (429). Retrying batch after ${waitMs / 1000}s...`);
+      await sleep(waitMs);
+      return await invokeLLM(system, user, options);  // one retry only
+    }
+    throw err;
+  }
 }
 
 module.exports = { runReverseEngineer, runGenerate };

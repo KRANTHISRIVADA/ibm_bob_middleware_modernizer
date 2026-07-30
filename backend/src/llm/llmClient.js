@@ -14,32 +14,74 @@ const axios = require('axios');
 
 // ─── Router ──────────────────────────────────────────────────────────────────
 
-async function invokeLLM(systemPrompt, userPrompt) {
+/**
+ * @param {string} systemPrompt
+ * @param {string} userPrompt
+ * @param {{ jsonMode?: boolean }} [options]
+ *   jsonMode: true  → enable provider JSON-mode enforcement (good for small structured RE output)
+ *   jsonMode: false → free-text response, let extractJSON() parse it (required for large code-gen output
+ *                     because JSON-mode causes Groq/OpenAI to reject multi-line strings as invalid JSON)
+ *   Defaults to true.
+ */
+async function invokeLLM(systemPrompt, userPrompt, options = {}) {
+  const jsonMode = options.jsonMode !== false;   // default true; pass false for code-gen
   const provider = (process.env.LLM_PROVIDER || 'ollama').toLowerCase();
   switch (provider) {
-    case 'gemini':  return invokeGemini(systemPrompt, userPrompt);
-    case 'groq':    return invokeGroq(systemPrompt, userPrompt);
-    case 'ollama':  return invokeOllama(systemPrompt, userPrompt);
-    case 'openai':  return invokeOpenAI(systemPrompt, userPrompt);
-    case 'watsonx': return invokeWatsonX(systemPrompt, userPrompt);
+    case 'gemini':  return invokeGemini(systemPrompt, userPrompt);          // Gemini has no JSON mode flag
+    case 'groq':    return invokeGroq(systemPrompt, userPrompt, jsonMode);
+    case 'ollama':  return invokeOllama(systemPrompt, userPrompt, jsonMode);
+    case 'openai':  return invokeOpenAI(systemPrompt, userPrompt, jsonMode);
+    case 'watsonx': return invokeWatsonX(systemPrompt, userPrompt);         // watsonx has no JSON mode flag
     default: throw new Error(`Unknown LLM_PROVIDER "${provider}". Valid: gemini | groq | ollama | openai | watsonx`);
   }
 }
 
 // ─── Shared helper: extract the first JSON object from any text ───────────────
 
+/**
+ * Some LLMs (especially Groq/llama when JSON-mode is off) emit JavaScript-style
+ * multi-line string concatenation inside what is otherwise valid JSON structure:
+ *
+ *   "content": "line1\n" +
+ *     "line2\n" +
+ *     "line3"
+ *
+ * This is not valid JSON.  normaliseJSStrings() collapses those sequences into a
+ * single JSON string before we attempt JSON.parse().
+ */
+function normaliseJSStrings(src) {
+  // Step 1 — collapse  "...\n" + \n?  "..." sequences (with optional whitespace / newlines between)
+  // We need to handle both:
+  //   "foo\n" +\n       "bar"   →  "foo\nbar"
+  //   "foo\n" +\n         "bar" →  "foo\nbar"  (indented continuation)
+  let result = src;
+  // Repeatedly collapse adjacent string fragments joined by + until stable
+  // Pattern: end of string (") whitespace* + whitespace* start of string (")
+  const joinPattern = /"\s*\+\s*\n?\s*"/g;
+  let prev;
+  do {
+    prev = result;
+    result = result.replace(joinPattern, '');
+  } while (result !== prev);
+  return result;
+}
+
 function extractJSON(text) {
   // Try direct parse first (provider returned clean JSON)
   try { return JSON.parse(text.trim()); } catch (_) {}
 
+  // Normalise JS-style string concatenation the model may have emitted
+  const normalised = normaliseJSStrings(text);
+  try { return JSON.parse(normalised.trim()); } catch (_) {}
+
   // Find the first { ... } block — handles markdown code fences and preamble text
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const fenced = normalised.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) {
     try { return JSON.parse(fenced[1].trim()); } catch (_) {}
   }
 
   // Greedy match of outermost braces
-  const raw = text.match(/\{[\s\S]*\}/);
+  const raw = normalised.match(/\{[\s\S]*\}/);
   if (raw) {
     try { return JSON.parse(raw[0]); } catch (_) {}
   }
@@ -95,7 +137,7 @@ async function invokeGemini(systemPrompt, userPrompt) {
 // ─── Groq (FREE — fast Llama & Mixtral, generous daily quota) ────────────────
 // Sign up: https://console.groq.com  → API Keys
 
-async function invokeGroq(systemPrompt, userPrompt) {
+async function invokeGroq(systemPrompt, userPrompt, jsonMode = true) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey || apiKey === 'your_groq_api_key_here') {
     throw new Error('GROQ_API_KEY not set. Get a free key at https://console.groq.com');
@@ -107,7 +149,10 @@ async function invokeGroq(systemPrompt, userPrompt) {
   //   mixtral-8x7b-32768       ← large context window
   const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
-  const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+  // json_object mode is great for small structured RE responses but causes Groq to reject
+  // large code-gen responses with json_validate_failed because the model emits JS-style
+  // string concatenation for multi-line content.  Disable it for code generation.
+  const body = {
     model,
     messages: [
       { role: 'system', content: systemPrompt },
@@ -115,8 +160,10 @@ async function invokeGroq(systemPrompt, userPrompt) {
     ],
     temperature: 0.1,
     max_tokens: 8192,
-    response_format: { type: 'json_object' },  // Groq supports OpenAI-compatible JSON mode
-  }, {
+  };
+  if (jsonMode) body.response_format = { type: 'json_object' };
+
+  const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', body, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
@@ -124,13 +171,19 @@ async function invokeGroq(systemPrompt, userPrompt) {
     timeout: 120000,
   });
 
-  return extractJSON(res.data.choices[0].message.content);
+  const choice = res.data.choices[0];
+  if (choice.finish_reason === 'length') {
+    // Output was truncated — log a clear warning so it appears in server logs
+    const logger = require('../utils/logger');
+    logger.warn('Groq response truncated (finish_reason=length). Output may be incomplete. Consider switching to a provider with higher token limits.');
+  }
+  return extractJSON(choice.message.content);
 }
 
 // ─── Ollama (LOCAL — completely free, runs on your machine) ──────────────────
 // Install: https://ollama.com/download  then run: ollama pull llama3.2
 
-async function invokeOllama(systemPrompt, userPrompt) {
+async function invokeOllama(systemPrompt, userPrompt, jsonMode = true) {
   const baseUrl  = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
   const model    = process.env.OLLAMA_MODEL    || 'llama3.2';
 
@@ -139,7 +192,9 @@ async function invokeOllama(systemPrompt, userPrompt) {
     res = await axios.post(`${baseUrl}/api/chat`, {
       model,
       stream: false,
-      format: 'json',   // Ollama JSON mode — forces valid JSON output
+      // Ollama format:'json' forces JSON output — disable for large code-gen responses
+      // to avoid the same multi-line string concatenation problem seen with Groq.
+      ...(jsonMode ? { format: 'json' } : {}),
       options: { temperature: 0.1, num_predict: 8192 },
       messages: [
         { role: 'system', content: systemPrompt },
@@ -168,14 +223,14 @@ async function invokeOllama(systemPrompt, userPrompt) {
 
 // ─── OpenAI (Paid, has free trial credits) ───────────────────────────────────
 
-async function invokeOpenAI(systemPrompt, userPrompt) {
+async function invokeOpenAI(systemPrompt, userPrompt, jsonMode = true) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey === 'your_openai_api_key_here') {
     throw new Error('OPENAI_API_KEY not set. See https://platform.openai.com/api-keys');
   }
 
   const model = process.env.OPENAI_MODEL || 'gpt-4o';
-  const res = await axios.post('https://api.openai.com/v1/chat/completions', {
+  const body = {
     model,
     messages: [
       { role: 'system', content: systemPrompt },
@@ -183,8 +238,10 @@ async function invokeOpenAI(systemPrompt, userPrompt) {
     ],
     temperature: 0.1,
     max_tokens: 8192,
-    response_format: { type: 'json_object' },
-  }, {
+  };
+  if (jsonMode) body.response_format = { type: 'json_object' };
+
+  const res = await axios.post('https://api.openai.com/v1/chat/completions', body, {
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     timeout: 120000,
   });
