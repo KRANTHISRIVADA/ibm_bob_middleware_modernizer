@@ -16,20 +16,83 @@ function sanitizeForPrompt(parsedData) {
   if (clean.schemas && typeof clean.schemas === 'object') {
     clean.schemas = Object.keys(clean.schemas);
   }
-  // XSLT and GatewayScript file contents can be very large — keep filename + first 300 chars
+  // XSLT/GWS files — filenames only for DataPower (content already referenced via referencedFiles + policyActions.transform)
   if (Array.isArray(clean.xsltFiles)) {
-    clean.xsltFiles = clean.xsltFiles.map(f => ({ file: f.file, contentPreview: (f.content || '').slice(0, 300) }));
+    clean.xsltFiles = clean.xsltFiles.map(f => f.file);
   }
   if (Array.isArray(clean.gatewayScriptFiles)) {
-    clean.gatewayScriptFiles = clean.gatewayScriptFiles.map(f => ({ file: f.file, contentPreview: (f.content || '').slice(0, 300) }));
+    clean.gatewayScriptFiles = clean.gatewayScriptFiles.map(f => f.file);
   }
-  // Trim individual endpoint descriptions/parameters to avoid bloat
+  // Trim endpoints
   if (Array.isArray(clean.endpoints)) {
     clean.endpoints = clean.endpoints.map(e => ({
       path: e.path, method: e.method, operationId: e.operationId,
       summary: e.summary, tags: e.tags, security: e.security,
       parameters: (e.parameters || []).slice(0, 10),
     }));
+  }
+
+  // ── DataPower-specific token reduction ────────────────────────────────────
+  // policyActions can be large — keep only name, type, input, output, transform (drop timeout/retry/etc.)
+  if (Array.isArray(clean.policyActions)) {
+    clean.policyActions = clean.policyActions.map(a => ({
+      name: a.name, type: a.type, input: a.input, output: a.output,
+      transform: a.transform || undefined, inputConversion: a.inputConversion || undefined,
+    }));
+  }
+  // policyRules — keep only name, direction, actions list
+  if (Array.isArray(clean.policyRules)) {
+    clean.policyRules = clean.policyRules.map(r => ({
+      name: r.name, direction: r.direction, actions: r.actions,
+    }));
+  }
+  // stylePolicies — keep name + policyMaps only
+  if (Array.isArray(clean.stylePolicies)) {
+    clean.stylePolicies = clean.stylePolicies.map(p => ({
+      name: p.name, policyMaps: p.policyMaps,
+    }));
+  }
+  // processingPolicies is a duplicate of stylePolicies — drop it from the prompt
+  delete clean.processingPolicies;
+  // matchingRules — keep name + first rule only (the default wildcard is already known)
+  if (Array.isArray(clean.matchingRules)) {
+    clean.matchingRules = clean.matchingRules.map(m => ({
+      name: m.name, summary: m.summary, rules: (m.rules || []).slice(0, 2),
+    }));
+  }
+  // referencedFiles — only user-uploaded local files, name only (drop src/hash)
+  if (Array.isArray(clean.referencedFiles)) {
+    clean.referencedFiles = clean.referencedFiles
+      .filter(f => f.location === 'local' && !f.internal)
+      .map(f => f.name);
+  }
+  // xsltMappings — keep only user local files (filter out dp-aux internal noise)
+  if (Array.isArray(clean.xsltMappings)) {
+    clean.xsltMappings = clean.xsltMappings
+      .filter(m => m.file && m.file.startsWith('local/'))
+      .map(m => ({
+        direction:      m.direction,
+        sourceField:    m.sourceField,
+        targetField:    m.targetField,
+        transformation: m.transformation,
+        file:           m.file,
+      }));
+  }
+  // httpConversionMaps — only the encoding value matters, keep compact
+  if (Array.isArray(clean.httpConversionMaps)) {
+    clean.httpConversionMaps = clean.httpConversionMaps.map(m => ({ name: m.name, encoding: m.defaultInputEncoding }));
+  }
+  // networkInterfaces — just IPs, no name field needed
+  if (Array.isArray(clean.networkInterfaces)) {
+    clean.networkInterfaces = clean.networkInterfaces.map(i => i.ipAddr);
+  }
+  // exportDetails — drop user/description/model fields, keep only the essential identity fields
+  if (clean.exportDetails && typeof clean.exportDetails === 'object') {
+    const ed = clean.exportDetails;
+    clean.exportDetails = {
+      deviceName: ed.deviceName, domain: ed.domain,
+      firmware: ed.firmwareVersion, exportDate: ed.exportDate,
+    };
   }
   return clean;
 }
@@ -73,30 +136,36 @@ Return EXACTLY this JSON structure (populate all fields):
 function buildDataPowerPrompt(parsedData, complexity, ragContext = '') {
   return {
     system: SYSTEM_RE,
-    user: `Reverse engineer this IBM DataPower configuration and return a JSON reverse engineering document.
+    user: `Reverse engineer this IBM DataPower export and return a JSON document.
 ${ragContext ? '\n' + ragContext + '\n' : ''}
 COMPLEXITY: ${complexity}
 PARSED METADATA:
 ${JSON.stringify(sanitizeForPrompt(parsedData), null, 2)}
 
-Return EXACTLY this JSON structure:
+INSTRUCTIONS: Use exportDetails for executiveSummary. Map frontSideHandlers port→endpointCatalog port and allowedMethods→HTTP verbs. For each MPGW service map backendUrl→routingDocument, requestType+responseType→interfaceInventory type, frontTimeout+backTimeout→nonFunctionalRequirements. Trace policyRules by direction (request-rule/response-rule/error-rule) through policyActions to build processingPipeline steps. For xform actions record the Transform XSL file in xsltTransformations. For convert-http actions document JSON↔XML mediation. Map cryptoReferences→securityAnalysis.cryptoObjects. referencedFiles missing from xsltFiles→gaps[].
+
+Return EXACTLY this JSON (populate all fields):
 {
   "sourcePlatform": "DATAPOWER",
   "complexity": "${complexity}",
   "executiveSummary": "string",
-  "services": [{"name":"string","type":"MPGW|WSP","localEndpoint":"string","backendUrl":"string","policy":"string"}],
-  "interfaceInventory": [{"name":"string","type":"string","description":"string"}],
-  "endpointCatalog": [{"service":"string","endpoint":"string","protocol":"string","backendUrl":"string"}],
-  "xsltTransformations": [{"file":"string","purpose":"string","inputs":[],"outputs":[]}],
+  "deviceContext": {"deviceName":"string","domain":"string","firmwareVersion":"string","exportDate":"string"},
+  "networkContext": [{"interfaceName":"string","ipAddress":"string","role":"inbound|backend|management"}],
+  "services": [{"name":"string","type":"MPGW|WSP","frontProtocol":"string","backendUrl":"string","requestType":"string","responseType":"string","policy":"string","frontTimeout":"string","backTimeout":"string"}],
+  "frontSideHandlers": [{"name":"string","port":"string","address":"string","allowedMethods":[],"httpVersion":"string"}],
+  "interfaceInventory": [{"name":"string","type":"HTTP|HTTPS|MQ|FTP|OTHER","description":"string"}],
+  "endpointCatalog": [{"service":"string","endpoint":"string","port":"string","protocol":"string","allowedMethods":[],"backendUrl":"string","summary":"string"}],
+  "processingPipeline": [{"serviceName":"string","direction":"request|response|error","steps":[{"stepNumber":1,"actionName":"string","type":"string","input":"string","output":"string","transform":"string"}]}],
+  "xsltTransformations": [{"file":"string","purpose":"string","direction":"request|response","inputFormat":"string","outputFormat":"string"}],
   "gatewayScripts": [{"file":"string","purpose":"string","keyLogic":"string"}],
   "sourceMappings": [{"sourceField":"string","targetField":"string","transformation":"string"}],
-  "routingDocument": [{"rule":"string","condition":"string","backendUrl":"string"}],
-  "securityAnalysis": {"policies":[],"cryptoObjects":[],"oauth":false,"apiKey":false,"mtls":false,"notes":"string"},
-  "errorHandling": [{"errorCode":"string","handling":"string","response":"string"}],
-  "nonFunctionalRequirements": {"timeout":"string","retry":"string","rateLimit":"string","logging":"string"},
+  "routingDocument": [{"rule":"string","condition":"string","matchingObject":"string","backendUrl":"string"}],
+  "securityAnalysis": {"policies":[],"cryptoObjects":[],"oauth":false,"apiKey":false,"mtls":false,"jwt":false,"notes":"string"},
+  "errorHandling": [{"errorCode":"string","handling":"string","response":"string","policyRule":"string"}],
+  "nonFunctionalRequirements": {"frontTimeout":"string","backTimeout":"string","timeout":"string","retry":"string","rateLimit":"string","logging":"string","maxMessageSize":"string"},
   "complexityAssessment": {"score":"SIMPLE|INTERMEDIATE|COMPLEX","rationale":"string","factors":[]},
   "migrationRecommendation": {"recommendedStack":"JAVA_SPRING_BOOT|NODEJS|PYTHON_FASTAPI","rationale":"string","risks":[],"estimatedEffort":"string"},
-  "testScenarios": [{"id":"string","description":"string","type":"UNIT|INTEGRATION"}],
+  "testScenarios": [{"id":"string","description":"string","type":"UNIT|INTEGRATION","input":"string","expectedOutput":"string"}],
   "gaps": ["string"],
   "risks": ["string"],
   "recommendations": ["string"]
@@ -182,9 +251,13 @@ function formatREContext(reContext) {
     lines.push('');
   }
 
-  if ((structured.sourceMappings || []).length) {
+  // Prefer LLM-derived sourceMappings; fall back to XSL-parsed xsltMappings when empty
+  const effectiveMappings = (structured.sourceMappings || []).length
+    ? structured.sourceMappings
+    : (structured.xsltMappings || []);
+  if (effectiveMappings.length) {
     lines.push('--- FIELD MAPPINGS (use these to generate mapper classes) ---');
-    lines.push(JSON.stringify(structured.sourceMappings, null, 2));
+    lines.push(JSON.stringify(effectiveMappings, null, 2));
     lines.push('');
   }
 
@@ -288,8 +361,14 @@ function buildSpringBootPrompt(reContext, complexity, ragContext = '') {
     ? `ENDPOINTS:\n${JSON.stringify(structured.endpointCatalog, null, 2)}`       : 'ENDPOINTS: none — infer a sensible REST API from the XSLT transformations or services.';
   const schemaBlock       = (structured.requestResponseSchemas || []).length
     ? `SCHEMAS:\n${JSON.stringify(structured.requestResponseSchemas, null, 2)}`   : 'SCHEMAS: none — create minimal POJOs as needed.';
-  const mappingBlock      = (structured.sourceMappings || []).length
-    ? `MAPPINGS:\n${JSON.stringify(structured.sourceMappings, null, 2)}`          : '';
+  // Use LLM-derived sourceMappings when available; fall back to XSL-parsed xsltMappings
+  // so real field names from the ZIP are always present even on a fallback-stub RE run.
+  const effectiveMappings = (structured.sourceMappings || []).length
+    ? structured.sourceMappings
+    : (structured.xsltMappings || []);
+  const mappingBlock      = effectiveMappings.length
+    ? `MAPPINGS (extracted from XSLT field mappings — use these exact field names for Request/Response POJOs and the Mapper):\n${JSON.stringify(effectiveMappings, null, 2)}`
+    : '';
   const transformBlock    = ((structured.transformationMapping || []).length || (structured.xsltTransformations || []).length)
     ? `TRANSFORMATIONS:\n${JSON.stringify((structured.transformationMapping || []).length ? structured.transformationMapping : structured.xsltTransformations, null, 2)}` : '';
   const routingBlock      = (structured.routingDocument || []).length

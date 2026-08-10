@@ -46,6 +46,14 @@ async function runReverseEngineer(jobId) {
     reData = buildFallbackRE(job, parsedData);
   }
 
+  // Merge XSL-parsed field mappings into reData so they are saved in the RE JSON
+  // and available to code-gen even when the LLM fallback stub has empty sourceMappings.
+  // Only add entries that aren't already covered by the LLM-extracted sourceMappings.
+  if (parsedData.xsltMappings && parsedData.xsltMappings.length > 0) {
+    reData.xsltMappings = parsedData.xsltMappings;
+    logger.info(`Merged ${parsedData.xsltMappings.length} XSL field mappings into RE data`);
+  }
+
   // Validate
   const validation = validateRE(reData);
   if (!validation.valid) {
@@ -215,6 +223,10 @@ function buildREContext(reverseDir, reData) {
     esqlModules:              reData.esqlModules              || [],   // IIB/ACE
     xsltTransformations:      reData.xsltTransformations      || [],   // DataPower
     gatewayScripts:           reData.gatewayScripts           || [],   // DataPower
+    // Field mappings parsed directly from XSL file content at parse time.
+    // Populated even when the LLM RE step uses the fallback stub, so the
+    // code-gen prompt always has real field names from the ZIP.
+    xsltMappings:             reData.xsltMappings             || [],   // DataPower
   };
 
   // 2. Individual artifact markdown files — read each one so the LLM sees

@@ -53,7 +53,11 @@ function write(dir, name, content) {
 }
 
 function buildExecutiveSummary(d) {
-  return `# Executive Summary\n\n**Source Platform:** ${d.sourcePlatform}\n**Complexity:** ${d.complexity}\n\n${d.executiveSummary || ''}\n\n## Key Facts\n- **API Title:** ${d.apiTitle || d.services?.[0]?.name || 'N/A'}\n- **Endpoints Identified:** ${(d.endpointCatalog || []).length}\n- **Interfaces:** ${(d.interfaceInventory || []).length}\n- **Gaps:** ${(d.gaps || []).length}\n- **Risks:** ${(d.risks || []).length}\n`;
+  const device = d.deviceContext || {};
+  const deviceInfo = device.deviceName
+    ? `\n## Device Context\n- **Device:** ${device.deviceName}\n- **Domain:** ${device.domain || 'N/A'}\n- **Firmware:** ${device.firmwareVersion || 'N/A'}\n- **Export Date:** ${device.exportDate || 'N/A'}\n`
+    : '';
+  return `# Executive Summary\n\n**Source Platform:** ${d.sourcePlatform}\n**Complexity:** ${d.complexity}\n\n${d.executiveSummary || ''}${deviceInfo}\n## Key Facts\n- **Service Name:** ${d.apiTitle || d.services?.[0]?.name || 'N/A'}\n- **Endpoints Identified:** ${(d.endpointCatalog || []).length}\n- **Interfaces:** ${(d.interfaceInventory || []).length}\n- **Processing Pipeline Steps:** ${(d.processingPipeline || []).reduce((acc, p) => acc + (p.steps || []).length, 0)}\n- **XSLT Transformations:** ${(d.xsltTransformations || []).length}\n- **Gaps:** ${(d.gaps || []).length}\n- **Risks:** ${(d.risks || []).length}\n`;
 }
 
 function buildInterfaceInventory(d) {
@@ -64,8 +68,8 @@ function buildInterfaceInventory(d) {
 
 function buildEndpointCatalog(d) {
   const rows = (d.endpointCatalog || []).map((e, idx) =>
-    `| ${idx + 1} | ${e.method || ''} | ${e.path || e.endpoint || ''} | ${e.summary || ''} | ${(e.security || []).join(', ')} | ${e.backendUrl || ''} |`).join('\n');
-  return `# Endpoint Catalog\n\n| # | Method | Path | Summary | Security | Backend URL |\n|---|--------|------|---------|----------|-------------|\n${rows}\n`;
+    `| ${idx + 1} | ${(e.allowedMethods || [e.method]).filter(Boolean).join(', ') || '-'} | ${e.path || e.endpoint || ''} | ${e.port ? `:${e.port}` : ''} | ${e.summary || ''} | ${(e.security || []).join(', ')} | ${e.backendUrl || ''} |`).join('\n');
+  return `# Endpoint Catalog\n\n| # | Methods | Path | Port | Summary | Security | Backend URL |\n|---|---------|------|------|---------|----------|-------------|\n${rows}\n`;
 }
 
 function buildSourceMapping(d) {
@@ -82,15 +86,30 @@ function buildSchemas(d) {
 }
 
 function buildTransformationMapping(d) {
-  const items = (d.transformationMapping || d.xsltTransformations || []).map((t, i) =>
-    `### ${i + 1}. ${t.step || t.file || 'Step'}\n- **Type:** ${t.type || ''}\n- **Logic:** ${t.logic || t.purpose || ''}\n`).join('\n');
-  return `# Transformation Mapping Document\n\n${items || '_No transformations identified._'}\n`;
+  // Prefer xsltTransformations (DataPower) then fall back to transformationMapping
+  const xslt = (d.xsltTransformations || []).map((t, i) =>
+    `### ${i + 1}. ${t.file || 'Transformation'}\n- **Direction:** ${t.direction || 'N/A'}\n- **Purpose:** ${t.purpose || ''}\n- **Input Format:** ${t.inputFormat || 'N/A'} → **Output Format:** ${t.outputFormat || 'N/A'}\n`).join('\n');
+  const generic = (d.transformationMapping || []).map((t, i) =>
+    `### ${i + 1}. ${t.step || 'Step'}\n- **Type:** ${t.type || ''}\n- **Logic:** ${t.logic || t.purpose || ''}\n`).join('\n');
+  const pipeline = buildPipelineSection(d);
+  return `# Transformation Mapping Document\n\n${pipeline}${xslt || generic || '_No transformations identified._'}\n`;
+}
+
+function buildPipelineSection(d) {
+  if (!(d.processingPipeline || []).length) return '';
+  const sections = (d.processingPipeline || []).map(p => {
+    const steps = (p.steps || []).map(s =>
+      `  ${s.stepNumber}. **${s.type}** \`${s.actionName}\` — Input: \`${s.input || '-'}\` → Output: \`${s.output || '-'}\`${s.transform ? ` [${s.transform}]` : ''}${s.notes ? ` — ${s.notes}` : ''}`
+    ).join('\n');
+    return `### Service: ${p.serviceName} (${p.direction})\n${steps}`;
+  }).join('\n\n');
+  return `## Processing Pipeline\n\n${sections}\n\n`;
 }
 
 function buildRoutingDocument(d) {
   const rows = (d.routingDocument || []).map((r, idx) =>
-    `| ${idx + 1} | ${r.rule} | ${r.condition} | ${r.backendUrl || r.destination || ''} |`).join('\n');
-  return `# Routing and Backend Endpoint Document\n\n| # | Rule | Condition | Backend URL |\n|---|------|-----------|-------------|\n${rows}\n`;
+    `| ${idx + 1} | ${r.rule} | ${r.condition} | ${r.matchingObject || '-'} | ${r.backendUrl || r.destination || ''} |`).join('\n');
+  return `# Routing and Backend Endpoint Document\n\n| # | Rule | Condition | Matching Object | Backend URL |\n|---|------|-----------|----------------|-------------|\n${rows}\n`;
 }
 
 function buildSecurityAnalysis(d) {
@@ -106,7 +125,7 @@ function buildErrorHandling(d) {
 
 function buildNFR(d) {
   const nfr = d.nonFunctionalRequirements || {};
-  return `# Non-Functional Requirements\n\n| Concern | Value |\n|---------|-------|\n| Timeout | ${nfr.timeout || 'Not specified'} |\n| Retry | ${nfr.retry || 'Not specified'} |\n| Rate Limiting | ${nfr.rateLimit || 'Not specified'} |\n| Logging | ${nfr.logging || 'Not specified'} |\n| Throttling | ${nfr.throttling || 'Not specified'} |\n`;
+  return `# Non-Functional Requirements\n\n| Concern | Value |\n|---------|-------|\n| Front Timeout | ${nfr.frontTimeout || nfr.timeout || 'Not specified'} |\n| Back Timeout | ${nfr.backTimeout || 'Not specified'} |\n| Retry | ${nfr.retry || 'Not specified'} |\n| Rate Limiting | ${nfr.rateLimit || 'Not specified'} |\n| Logging | ${nfr.logging || 'Not specified'} |\n| Throttling | ${nfr.throttling || 'Not specified'} |\n| Max Message Size | ${nfr.maxMessageSize || 'Not specified'} |\n| Persistent Connections | ${nfr.persistentConnections || 'Not specified'} |\n`;
 }
 
 function buildComplexity(d) {
