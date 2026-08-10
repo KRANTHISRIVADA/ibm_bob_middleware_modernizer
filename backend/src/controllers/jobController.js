@@ -125,7 +125,7 @@ async function triggerGenerate(req, res, next) {
 
     const job = db.getJob(jobId);
     if (!job) return res.status(404).json({ error: 'Job not found' });
-    if (!['RE_COMPLETE', 'GEN_FAILED'].includes(job.status))
+    if (!['RE_COMPLETE', 'GEN_FAILED', 'GEN_IN_PROGRESS'].includes(job.status))
       return res.status(400).json({ error: `Cannot generate from status: ${job.status}` });
 
     db.updateJob(jobId, { targetStack, status: 'GEN_IN_PROGRESS', updatedAt: new Date().toISOString() });

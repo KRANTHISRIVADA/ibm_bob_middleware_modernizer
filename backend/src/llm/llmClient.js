@@ -26,6 +26,27 @@ const axios = require('axios');
 async function invokeLLM(systemPrompt, userPrompt, options = {}) {
   const jsonMode = options.jsonMode !== false;   // default true; pass false for code-gen
   const provider = (process.env.LLM_PROVIDER || 'ollama').toLowerCase();
+
+  // ── Prompt debug logging ────────────────────────────────────────────────────
+  // Prints the full system + user prompt to the console before every LLM call.
+  // Helps diagnose token overflows, missing context, and wrong data sections.
+  const userLen   = userPrompt.length;
+  const sysLen    = systemPrompt.length;
+  const totalLen  = sysLen + userLen;
+  const estTokens = Math.round(totalLen / 3.5);  // conservative estimate
+
+  console.log('\n' + '═'.repeat(70));
+  console.log(`🤖  LLM CALL  |  provider: ${provider}  |  jsonMode: ${jsonMode}`);
+  console.log(`📏  system: ${sysLen} chars  |  user: ${userLen} chars  |  total: ${totalLen} chars  (~${estTokens} tokens est.)`);
+  console.log('─'.repeat(70));
+  console.log('📋  SYSTEM PROMPT:');
+  console.log(systemPrompt);
+  console.log('─'.repeat(70));
+  console.log('📝  USER PROMPT:');
+  console.log(userPrompt);
+  console.log('═'.repeat(70) + '\n');
+  // ────────────────────────────────────────────────────────────────────────────
+
   switch (provider) {
     case 'gemini':  return invokeGemini(systemPrompt, userPrompt);          // Gemini has no JSON mode flag
     case 'groq':    return invokeGroq(systemPrompt, userPrompt, jsonMode);
@@ -159,7 +180,10 @@ async function invokeGroq(systemPrompt, userPrompt, jsonMode = true) {
       { role: 'user',   content: userPrompt   },
     ],
     temperature: 0.1,
-    max_tokens: 8192,
+    // 32768 is the max output for llama-3.3-70b-versatile on Groq free tier.
+    // Previous 8192 was too small for Spring Boot code-gen batches (6 full Java files),
+    // causing finish_reason=length → truncated JSON → parse error → GEN_FAILED.
+    max_tokens: 32768,
   };
   if (jsonMode) body.response_format = { type: 'json_object' };
 

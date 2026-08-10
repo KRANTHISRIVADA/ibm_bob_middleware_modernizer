@@ -60,6 +60,26 @@ app.use(errorHandler);
 // Start server (async because db.init() is async)
 async function start() {
   await db.init();
+
+  // Reset any jobs that were stuck mid-flight when the server last stopped.
+  // Without this, a job killed during RE_IN_PROGRESS / GEN_IN_PROGRESS can
+  // never be retried because the controller only allows retries from *_FAILED.
+  const stuckJobs = db.listJobs().filter(j =>
+    j.status === 'RE_IN_PROGRESS' || j.status === 'GEN_IN_PROGRESS'
+  );
+  if (stuckJobs.length) {
+    logger.warn(`Resetting ${stuckJobs.length} stuck in-progress job(s) to failed state so they can be retried`);
+    for (const j of stuckJobs) {
+      const failStatus = j.status === 'RE_IN_PROGRESS' ? 'RE_FAILED' : 'GEN_FAILED';
+      db.updateJob(j.id, {
+        status: failStatus,
+        error: 'Server was restarted while job was in progress — please retry',
+        updatedAt: new Date().toISOString(),
+      });
+      logger.warn(`  Job ${j.id} (${j.name}) reset: ${j.status} → ${failStatus}`);
+    }
+  }
+
   // Warm up RAG index at startup so first request doesn't pay the build cost
   ensureIndex();
   app.listen(PORT, () => {
